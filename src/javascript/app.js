@@ -15,21 +15,47 @@ Ext.define('CustomApp', {
 
     	if (this.down('#field-selector')){
         	this.down('#field-selector').destroy();
+        	this.down('#view-selector').destroy();
+        	this.down('#run-button').destroy();
+        	if (this.down('#report-grid')){
+        		this.down('#report-grid').destroy();
+        	}
         }
     	
     	var model_type = cb.getValue();
+    	
     	var cb_field = this.down('#display_box').add({
         	xtype: 'rallyfieldcombobox',
             fieldLabel: 'Field type:',
             itemId: 'field-selector',
-            model: model_type,
-            listeners: {
-                scope: this,
-                change: this._generateReport
-            }
+            model: model_type
         }); 
     	var field_store = cb_field.getStore();
     	field_store.on('load',this._filterDropDownList,this);
+    	
+    	this.down('#display_box').add({
+    			xtype: 'rallycombobox',
+    			store: Ext.create('Rally.data.custom.Store', {
+    		        data: [
+    		               {name:'Cumulative Age', val:'_displayCumulativeAge'},
+    		               {name:'Last Transition Date', val:'_displayLastTransitionDate'},
+    		               {name:'Export', val:'_export'}
+    		               ],
+    		        autoLoad: true
+    		    }),
+    		    itemId: 'view-selector',
+    		    displayField: 'name',
+    		    valueField: 'name',
+    		    fieldLabel: 'View'
+    		});
+    	
+    	this.down('#display_box').add({
+    			xtype: 'rallybutton',
+    			text: 'Run',
+    			itemId: 'run-button',
+    			scope: this,
+    			handler: this._run
+    	});
     },
     _addTypeSelector: function(){
         this.logger.log('_addTypeSelector');
@@ -85,27 +111,45 @@ Ext.define('CustomApp', {
                 return valid;
             } 
         }]);
-        //this.down('#field-selector').setValue(store.getAt(1));
+        this.down('#field-selector').setValue(store.getAt(1));
     },
-    _generateReport: function(cb){
-    	this.logger.log('_generateReport', cb.getRecord());
-    	
+    _getProcessStates: function(field){
     	var process_states = [];
-    	Ext.each(cb.getRecord().get('fieldDefinition').attributeDefinition.AllowedValues, function(av){
+    	Ext.each(field.get('fieldDefinition').attributeDefinition.AllowedValues, function(av){
     		if (av.StringValue){
         		process_states.push(av.StringValue);
     		}
     	},this);
+       	this.logger.log('_getProcessStates', process_states);
+    	return process_states;
+    },
+    _displayCumulativeAge: function(args){
+    	alert('_displayCumulativeAge',args);
+    },
+    _displayLastTransitionDate: function(args){
+    	alert('_displayLastTransitionDate',args);
+    },
+    _export: function(args){
+    	alert('_export',args);
+    },
+    _run: function(){
+    	this.logger.log('_generateReport');
     	
-    	this.logger.log('_generateReport process_states=', process_states);
-    	var project_id = this.getContext().getProject().ObjectID; 
+        //Get Settings
+    	var model = this.down('#type-selector').getValue();
+    	var field = this.down('#field-selector').getRecord(); 
+    	var action = this.down('#view-selector').getValue();
+    	var process_states = this._getProcessStates(field);
+     	var project_id = this.getContext().getProject().ObjectID; 
+     	this.logger.log('Run settings:',model,field,action,process_states,project_id);
+     	
+     	//this[action];
     	
-    	field = cb.getRecord().get('fieldDefinition').name;  
-    	model = this.down('#type-selector').value;
-    	this._fetchLookbackStore(model, field, project_id).then({
+    	var field_name = field.get('fieldDefinition').name;  
+    	this._fetchLookbackStore(model, field_name, project_id).then({
     		scope: this,
     		success: function(data) {
-    			this._buildCustomStore(data, field, process_states);
+    			this._buildCustomStore(data, field_name, process_states);
     		},
     		failure: this._alertError
     	});
@@ -227,15 +271,12 @@ Ext.define('CustomApp', {
 			colcfgs['text'] = col;
 			gcolcfgs.push(colcfgs);
 		});
-		
-		if (this.down('#age-grid')){
-			this.down('#age-grid').destroy();
-		}
+
 
 		this.down('#display_box').add({
 			xtype:'rallygrid',
 			store: store,
-			itemId: 'age-grid',
+			itemId: 'report-grid',
 			columnCfgs: gcolcfgs
 		});
 
