@@ -3,10 +3,10 @@
 <head>
     <title>Process State Report</title>
     <!--  (c) 2013 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Fri Oct 17 2014 13:39:12 GMT-0700 (PDT) -->
+    <!--  Build Date: Tue Nov 04 2014 10:48:37 GMT-0700 (MST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Fri Oct 17 2014 13:39:12 GMT-0700 (PDT)";
+        var APP_BUILD_DATE = "Tue Nov 04 2014 10:48:37 GMT-0700 (MST)";
         var CHECKSUM = [%= checksum %];
     </script>
     

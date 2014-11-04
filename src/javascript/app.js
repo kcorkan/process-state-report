@@ -35,17 +35,10 @@ Ext.define('CustomApp', {
     	
     	this.down('#display_box').add({
     			xtype: 'rallycombobox',
-    			store: Ext.create('Rally.data.custom.Store', {
-    		        data: [
-    		               {name:'Cumulative Age', val:'_displayCumulativeAge'},
-    		               {name:'Last Transition Date', val:'_displayLastTransitionDate'},
-    		               {name:'Export', val:'_export'}
-    		               ],
-    		        autoLoad: true
-    		    }),
+    			store: Rally.technicalservices.data.CalculatedStore.getViewStore(),
     		    itemId: 'view-selector',
     		    displayField: 'name',
-    		    valueField: 'name',
+    		    valueField: 'operation',
     		    fieldLabel: 'View'
     		});
     	
@@ -143,16 +136,54 @@ Ext.define('CustomApp', {
      	var project_id = this.getContext().getProject().ObjectID; 
      	this.logger.log('Run settings:',model,field,action,process_states,project_id);
      	
-     	//this[action];
-    	
     	var field_name = field.get('fieldDefinition').name;  
-    	this._fetchLookbackStore(model, field_name, project_id).then({
-    		scope: this,
-    		success: function(data) {
-    			this._buildCustomStore(data, field_name, process_states);
-    		},
-    		failure: this._alertError
+    	var cs = Ext.create('Rally.technicalservices.data.CalculatedStore',{
+    		timelineField: field_name,
+    		currentProjectId: project_id,
+    		timelineStates: process_states
     	});
+    	cs.load(action).then({
+    		scope: this,
+    		success: function(data){
+    	    	this.logger.log('CalculatedStore.load Success', data);
+    	    	var store = Ext.create('Rally.data.custom.Store', {
+    		        data: data,
+    		        autoLoad: true
+    		    });
+    	    	
+    	    	var gcolcfgs = [];
+    	    	Object.keys(data[0]).forEach(function(key) {
+    	    		console.log(key);
+    				var colcfgs = {};
+    				colcfgs['dataIndex'] = key;
+    				colcfgs['text'] = key;
+    				gcolcfgs.push(colcfgs);
+    	    	});
+console.log(gcolcfgs);
+    	    	if (this.down('#report-grid')){
+    	    		this.down('#report-grid').destroy();
+    	    	}
+    			this.down('#display_box').add({
+    				xtype:'rallygrid',
+    				store: store,
+    				itemId: 'report-grid',
+    				columnCfgs: gcolcfgs
+    			});
+
+    		}
+    	});
+
+    	
+    	
+    	
+    	
+//    	this._fetchLookbackStore(model, field_name, project_id).then({
+//    		scope: this,
+//    		success: function(data) {
+//    			this._buildCustomStore(data, field_name, process_states);
+//    		},
+//    		failure: this._alertError
+//    	});
     },
     _fetchLookbackStore:function(model_name, field_name, current_project_id){
     	this.logger.log('_fetchLookbackStore',model_name,field_name,current_project_id);
