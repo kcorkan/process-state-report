@@ -20,7 +20,7 @@ Ext.define('Rally.technicalservices.data.Timepoint',{
 		var hours = this.getDurationInHours();
 		console.log('hours',hours);
 		if (hours > 0) {
-			return Math.max(1, Math.round(hours/24));
+			return hours/24;
 		}
 		return 0;
 	}
@@ -96,8 +96,8 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 		console.log('getage',regex, this.timepoints);
 		var age = 0; 
 		Ext.each(this.timepoints, function(tp){
-			var match = tp.fieldValue.match(regex);
-			if (match != null && tp.fieldValue == match[0]){
+			var match = tp.fieldValue.toString().match(regex);
+			if (match != null && tp.fieldValue.toString() == match[0]){
 				age += tp.getDurationInDays();
 			}
 		}, this);
@@ -114,8 +114,8 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 		var regex = new RegExp(state,"i"); //case insensitive
 		var last_start_date = "N/A";
 		Ext.each(this.timepoints, function(tp){
-			var match = tp.fieldValue.match(regex);
-			if (match != null && tp.fieldValue == match[0]){
+			var match = tp.fieldValue.toString().match(regex);
+			if (match != null && tp.fieldValue.toString() == match[0]){
 				last_start_date = tp.startDate;
 			}
 		},this);
