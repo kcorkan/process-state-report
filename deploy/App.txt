@@ -3,11 +3,11 @@
 <head>
     <title>Process State Report</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Fri Nov 07 2014 14:03:24 GMT-0800 (PST) -->
+    <!--  Build Date: Mon Nov 10 2014 16:02:49 GMT-0800 (PST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Fri Nov 07 2014 14:03:24 GMT-0800 (PST)";
-        var CHECKSUM = 10107435262;
+        var APP_BUILD_DATE = "Mon Nov 10 2014 16:02:49 GMT-0800 (PST)";
+        var CHECKSUM = 10229547391;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -597,6 +597,7 @@ Ext.define('CustomApp', {
     _run: function(){
     	this.logger.log('_generateReport');
     	
+    	this.setLoading(true);
         //Get Settings
     	var model = this.down('#type-selector').getValue();
     	var field = this.down('#field-selector').getRecord(); 
@@ -638,6 +639,10 @@ Ext.define('CustomApp', {
     				itemId: 'report-grid',
     				columnCfgs: gcolcfgs
     			});
+    			this.setLoading(false);
+    		},
+    		failure: function(){
+    			this.setLoading(false);
     		}
     	});
     }

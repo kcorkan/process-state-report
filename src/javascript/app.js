@@ -126,6 +126,7 @@ Ext.define('CustomApp', {
     _run: function(){
     	this.logger.log('_generateReport');
     	
+    	this.setLoading(true);
         //Get Settings
     	var model = this.down('#type-selector').getValue();
     	var field = this.down('#field-selector').getRecord(); 
@@ -167,6 +168,10 @@ Ext.define('CustomApp', {
     				itemId: 'report-grid',
     				columnCfgs: gcolcfgs
     			});
+    			this.setLoading(false);
+    		},
+    		failure: function(){
+    			this.setLoading(false);
     		}
     	});
     }
