@@ -7,7 +7,6 @@ Ext.define('Rally.technicalservices.data.Timepoint',{
 	},	
 	getDurationInHours: function(){
 		//TODO Verify dates are valid
-		console.log('getDurationInHours',this.startDate,this.endDate);
 	    var ms = Ext.Date.getElapsed(new Date(this.startDate),new Date(this.endDate));
 	    var hours = 0;
 	    if (ms > 0) {
@@ -16,9 +15,7 @@ Ext.define('Rally.technicalservices.data.Timepoint',{
  	    return hours;
 	},
 	getDurationInDays: function(){
-		console.log('getDurationInDays', this);
 		var hours = this.getDurationInHours();
-		console.log('hours',hours);
 		if (hours > 0) {
 			return hours/24;
 		}
@@ -34,7 +31,6 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 		Ext.apply(this,config);
 	},
 	setData: function(record){
-		console.log('setData',record.get('FormattedID'));
 		Ext.each(record.getFields(), function(f){
 			if (f.name != "_id" && f.name != "_ValidTo" && f.name != "_ValidFrom"){
 				if (f.name != this.timelineField){
@@ -65,7 +61,6 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 		var tp_val = record.get(this.timelineField);
 		var tp_startDate = new Date(record.get('_ValidFrom'));
 		var tp_endDate = new Date();
-		console.log('addTimepoint',tp_val,tp_startDate,tp_endDate);
 		//TODO calculate end date based on next start date
 		var tp = Ext.create('Rally.technicalservices.data.Timepoint',{
 			fieldValue: tp_val,
@@ -93,7 +88,6 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 	getCumulativeAgeInDays: function(val){
 		//TODO check if val is number or string
 		var regex = new RegExp(val,"i"); //case insensitive
-		console.log('getage',regex, this.timepoints);
 		var age = 0; 
 		Ext.each(this.timepoints, function(tp){
 			var match = tp.fieldValue.toString().match(regex);
@@ -110,7 +104,6 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 		return this.timepoints.length;
 	},
 	getLastTransitionStartDate: function(state){
-		console.log('getLastTransitionStartDate');
 		var regex = new RegExp(state,"i"); //case insensitive
 		var last_start_date = "N/A";
 		Ext.each(this.timepoints, function(tp){
@@ -119,7 +112,6 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 				last_start_date = tp.startDate;
 			}
 		},this);
-		console.log('getLastTransitionStartDate', last_start_date);
 		return last_start_date;  
 	}
 });
@@ -235,7 +227,6 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     		var num_tp = timeline_hash[formatted_id].getNumTransitions();
     		if (num_tp > this.maxTimepoints){
     			this.maxTimepoints = num_tp;
-    			console.log('maxtp',this.maxTimepoints);
     		}
     	}, this);
 		return timeline_hash;
@@ -254,7 +245,6 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
    			//Initialize the row headers
     		Ext.each(tl_states, function(state){
     			row[state] = tl.getCumulativeAgeInDays(state);
-    			console.log('state and age', state, row[state]);
     		}, this);
    			row['Transitions'] = tl.timepoints.length
   		data.push(row);
@@ -290,7 +280,6 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 
     		var tl = tl_hash[key];
    			var row = tl.timelineData
-   			console.log(key, tl);
    			//Initialize the row headers
    			var counter = 0;
 

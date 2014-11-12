@@ -56,7 +56,8 @@ Ext.define('CustomApp', {
 			text: 'Export',
 			itemId: 'export-button',
 			scope: this,
-			handler: this._exportData
+			handler: this._exportData,
+			disabled: true
     	});
 
     },
@@ -164,7 +165,6 @@ Ext.define('CustomApp', {
     	    	
     	    	var gcolcfgs = [];
     	    	Object.keys(data[0]).forEach(function(key) {
-    	    		console.log(key);
     				var colcfgs = {};
     				colcfgs['dataIndex'] = key;
     				colcfgs['text'] = key;
@@ -180,6 +180,7 @@ Ext.define('CustomApp', {
     				itemId: 'report-grid',
     				columnCfgs: gcolcfgs
     			});
+    			this.down('#export-button').setDisabled(false);
     			this.setLoading(false);
     		},
     		failure: function(){
