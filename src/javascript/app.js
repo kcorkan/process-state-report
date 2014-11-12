@@ -4,12 +4,12 @@ Ext.define('CustomApp', {
     logger: new Rally.technicalservices.Logger(),
     items: [
         {xtype:'container',itemId:'criteria_box'},
-        {xtype:'container',itemId:'button_box',layout:{type:'hbox'}},
+        {xtype:'container',itemId:'button_box',layout:{type:'hbox'}, padding: 10},
+        {xtype:'container',itemId:'filter_box',layout:{type:'hbox'}, padding: 10},
         {xtype:'container',itemId:'display_box'},
         {xtype:'tsinfolink'}
     ],
     launch: function() {
-
     	this._addTypeSelector();
     },
     _addFieldSelector: function(cb){
@@ -17,6 +17,7 @@ Ext.define('CustomApp', {
 
     	if (this.down('#field-selector')){
         	this.down('#field-selector').destroy();
+        	this.down('#additional-field-selector').destroy();
         	this.down('#view-selector').destroy();
         	this.down('#run-button').destroy();
         	if (this.down('#report-grid')){
@@ -24,32 +25,52 @@ Ext.define('CustomApp', {
         	}
         }
     	
-    	var model_type = cb.getValue();
-    	
+     	var model_type = cb.getValue();
     	var cb_field = this.down('#criteria_box').add({
         	xtype: 'rallyfieldcombobox',
-            fieldLabel: 'Field type:',
+            fieldLabel: 'Field type',
             itemId: 'field-selector',
-            model: model_type
+            model: model_type,
+		    labelWidth: 100,
+		    minWidth: 300
         }); 
+    	
     	var field_store = cb_field.getStore();
     	field_store.on('load',this._filterDropDownList,this);
+
+    	this.down('#criteria_box').add({
+    		xtype: 'rallyfieldpicker',
+            autoExpand: false,
+            modelTypes: [model_type],
+            margin: '0 0 5 0',
+            fieldLabel: 'Additional Display Columns',
+            alwaysExpanded: false,
+            itemId: 'additional-field-selector',
+            minWidth: 300,
+            alwaysSelectedValues: ['FormattedID','Name']
+    	});
     	
     	this.down('#criteria_box').add({
-    			xtype: 'rallycombobox',
-    			store: Rally.technicalservices.data.CalculatedStore.getViewStore(),
-    		    itemId: 'view-selector',
-    		    displayField: 'name',
-    		    valueField: 'operation',
-    		    fieldLabel: 'View'
-    		});
-    	
+			xtype: 'rallycombobox',
+			store: Rally.technicalservices.data.CalculatedStore.getViewStore(),
+		    itemId: 'view-selector',
+		    displayField: 'name',
+		    valueField: 'operation',
+		    fieldLabel: 'View',
+		    labelWidth: 100,
+		    minWidth: 300
+    	});
+
+    	/*
+    	 * Action Buttons
+    	 */
     	this.down('#button_box').add({
-    			xtype: 'rallybutton',
-    			text: 'Run',
-    			itemId: 'run-button',
-    			scope: this,
-    			handler: this._run
+			xtype: 'rallybutton',
+			text: 'Run',
+			itemId: 'run-button',
+			scope: this,
+			handler: this._run,
+			margin: '0 10 0 95'
     	});
     	this.down('#button_box').add({
 			xtype: 'rallybutton',
@@ -57,9 +78,9 @@ Ext.define('CustomApp', {
 			itemId: 'export-button',
 			scope: this,
 			handler: this._exportData,
-			disabled: true
+			disabled: true,
+			margin: '0 10 0 0'
     	});
-
     },
     _addTypeSelector: function(){
         this.logger.log('_addTypeSelector');
@@ -81,12 +102,14 @@ Ext.define('CustomApp', {
         this.down('#criteria_box').add({
             xtype: 'rallycombobox',
             displayField: 'DisplayName',
-            fieldLabel: 'Artifact type:',
+            fieldLabel: 'Artifact type',
             valueField: 'TypePath',
             itemId: 'type-selector',
             stateId: 'artifact-type',
             stateful: true,
             stateEvents: ['change'],
+		    labelWidth: 100,
+		    minWidth: 300,
             storeConfig: {
                 autoLoad: true,
                 model: 'TypeDefinition',
@@ -134,6 +157,19 @@ Ext.define('CustomApp', {
        	this.logger.log('_getProcessStates', process_states);
     	return process_states;
     },
+    _getFetchFields: function(){
+    	this.logger.log('_getFetchFields');
+    	
+    	var selected_values = [];
+    	Ext.each(this.down('#additional-field-selector').getValue(), function(obj){
+    		selected_values.push(obj.get('name'));
+    	},this);
+    	
+    	var fetch_fields = Ext.Array.merge(this.down('#additional-field-selector').getAlwaysSelectedValues(),
+    			selected_values);
+    	this.logger.log('_getFetchFields returning', fetch_fields);
+    	return fetch_fields;
+    },
     _run: function(){
     	this.logger.log('_generateReport');
     	
@@ -144,6 +180,8 @@ Ext.define('CustomApp', {
     	var field = this.down('#field-selector').getRecord(); 
     	var action = this.down('#view-selector').getValue();
     	var process_states = this._getProcessStates(field);
+    	var fetch_fields = this._getFetchFields();
+
      	var project_id = this.getContext().getProject().ObjectID; 
      	this.logger.log('Run settings:',model,field,action,process_states,project_id);
      	
@@ -151,13 +189,16 @@ Ext.define('CustomApp', {
     	var cs = Ext.create('Rally.technicalservices.data.CalculatedStore',{
     		timelineField: field_name,
     		currentProjectId: project_id,
-    		timelineStates: process_states
+    		timelineStates: process_states,
+    		rallyType: model,
+    		fetchFields: fetch_fields
     	});
     	cs.load(action).then({
     		scope: this,
     		success: function(data){
     	    	this.logger.log('CalculatedStore.load Success', data);
     	    	this.exportData = data;  
+    	    	
     	    	var store = Ext.create('Rally.data.custom.Store', {
     		        data: data,
     		        autoLoad: true
@@ -174,6 +215,7 @@ Ext.define('CustomApp', {
     	    	if (this.down('#report-grid')){
     	    		this.down('#report-grid').destroy();
     	    	}
+    	    	
     			this.down('#display_box').add({
     				xtype:'rallygrid',
     				store: store,
@@ -209,5 +251,4 @@ Ext.define('CustomApp', {
     	});
     	Rally.technicalservices.FileUtilities.saveTextAsFile(text, fileName.toString());
     }
-
 });

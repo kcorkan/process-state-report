@@ -41,6 +41,22 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 			}
 		},this);
 	},
+	getHydratedData: function(wsapiHydratedFields, wsapiHydratedValues){
+		var hydrated_fields = Object.keys(wsapiHydratedFields);
+		var data = {};
+		Ext.each(Object.keys(this.timelineData), function(key){
+			var val = this.timelineData[key];
+			if (val && val != '' && Ext.Array.contains(hydrated_fields,key)){
+				var wsapi_value_key = wsapiHydratedFields[key];
+				var new_val = wsapiHydratedValues[wsapi_value_key][val.toString()];
+				if (new_val){
+					val = new_val;
+				}
+			}
+			data[key] = val;
+		},this);
+		return data;
+	},
 	set: function(field, value){
 		if (this.timelineData == null) {
 			this.timelineData = {};
@@ -61,6 +77,7 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 		var tp_val = record.get(this.timelineField);
 		var tp_startDate = new Date(record.get('_ValidFrom'));
 		var tp_endDate = new Date();
+		
 		//TODO calculate end date based on next start date
 		var tp = Ext.create('Rally.technicalservices.data.Timepoint',{
 			fieldValue: tp_val,
@@ -118,6 +135,15 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 
 Ext.define('Rally.technicalservices.data.CalculatedStore',{
     logger: new Rally.technicalservices.Logger(),
+	MAX_CHUNK_SIZE: 50,
+	wsapiHydratedFields:  {
+		    'Project':'Project',
+			'Iteration':'Iteration',
+			'Feature':'PortfolioItem/Feature',
+			'Owner':'User',
+			'SubmittedBy':'User',
+			'Release':'Release'},
+
 	/*
 	 * sourceFields: fields to fetch from the store
 	 */
@@ -135,23 +161,36 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 	currentProjectId: 0,
 	timelineHash: null,
 	maxTimepoints: 0,
+	rallyType: 'HierarchicalRequirement',
+	fetchFields: '',
+	
 	constructor: function(config){
 		Ext.apply(this,config);
 	},
+	
 	load: function(action){
 		var deferred = Ext.create('Deft.Deferred');
 		this.maxTimepoints = 0;
-		this._fetchLookbackStore('HierarchicalRequirement',this.currentProjectId).then({
+		this._fetchLookbackStore(this.rallyType,this.currentProjectId).then({
 				scope: this,
 				success: function(data){
 					var tl_hash = this._mungeLookbackDataIntoTimelineHash(data);
+			    	this._getWsapiHydratedValues().then({
+			    		scope: this,
+			    		success: function(){
 
-					if (this[action]){
-						var flattened_data = this[action](tl_hash);
-						deferred.resolve(flattened_data);
-					} else {
-						deferred.reject("Invalid Action:" + action);
-					}
+							if (this[action]){
+								var flattened_data = this[action](tl_hash);
+								deferred.resolve(flattened_data);
+							} else {
+								deferred.reject("Invalid Action:" + action);
+							}
+			    		},
+			    		failure: function(error){
+			    			alert('Error Hydrating WSAPI values: ' + error);
+			    		}
+			    	});
+
 				},
 				failure: function(error){
 					deferred.reject(error);
@@ -160,6 +199,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 		});
 		return deferred.promise;
 	},
+	
 	initConfigs: function(){
 		if (this.sourceFields == null) {
 			this.sourceFields = [];	
@@ -171,17 +211,30 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 			this.timelineStates = [];
 		}
 	},
-
+	
+	_getFetchFields: function(){
+		var fetch_fields = Ext.Array.merge(this.fetchFields, [this.timelineField]);
+		return fetch_fields;
+	},
+	
+	_getHydrateFields: function(){
+		var hydrated_fields = ['ScheduleState','State'];
+		var fetch_hydrate = [];
+    	Ext.each(this._getFetchFields(), function(field){
+    		if (Ext.Array.contains(hydrated_fields, field)){
+    			fetch_hydrate.push(field);
+    		}
+    	},this);
+    	return fetch_hydrate;
+	},
+	
     _fetchLookbackStore:function(model_name, current_project_id){
     	this.logger.log('_fetchLookbackStore',model_name,this.timelineField,current_project_id);
     	var deferred = Ext.create('Deft.Deferred');
     	
     	var previous_field_name = Ext.String.format("_PreviousValues.{0}",this.timelineField); 
-    	var fetch_fields = ['FormattedID','Name','_ValidFrom','_ValidTo','CreationDate',this.timelineField];
-    	var fetch_hydrate = [];
-    	if (this.timelineField == "ScheduleState" || this.timelineField == "State"){
-    		fetch_hydrate.push(this.timelineField);
-    	}
+    	var fetch_fields = this._getFetchFields();
+    	var fetch_hydrate = this._getHydrateFields();
 
     	Ext.create('Rally.data.lookback.SnapshotStore', {
             scope: this,
@@ -209,10 +262,115 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
        });         
     return deferred.promise;
     },
+    _addToWsapiHydratedValues: function(rec){
+		this.logger.log('_addToWsapiHydratedValues', rec);
+    	Ext.each(Object.keys(this.wsapiHydratedFields), function(f){
+    		this.logger.log('_addToWsapiHydratedValues key', f);
+   		
+			if (rec.get(f)){
+				var obj_type = this.wsapiHydratedFields[f];
+	    		this.logger.log('_addToWsapiHydratedValues obj_type', obj_type);
+
+				if (this.wsapiHydratedValues[obj_type] == undefined){
+					this.wsapiHydratedValues[obj_type]={};
+				} 
+				if (this.wsapiHydratedValues[obj_type][rec.get(f).toString()] == undefined) {
+					this.wsapiHydratedValues[obj_type][rec.get(f).toString()] = rec.get(f);
+				}
+			}
+		},this);
+    },
+	_getWsapiHydratedValues: function(){
+		this.logger.log('_getWsapiHydratedValues', this.wsapiHydratedValues);
+		var deferred = Ext.create('Deft.Deferred');
+		
+		var queries = Object.keys(this.wsapiHydratedValues);
+        var promises = [];
+        
+        Ext.each(queries, function(q){
+			var values = Object.keys(this.wsapiHydratedValues[q]);
+			var values_to_hydrate = [];
+			Ext.each(values, function(v){
+				if (this.wsapiHydratedValues[q][v].toString() == this.wsapiHydratedValues[q][v].toString()){
+					values_to_hydrate.push(v);
+				}
+			},this);
+			
+			this.logger.log('Hydrating Values',q,values_to_hydrate.length, values_to_hydrate);
+//			if (values_to_hydrate.length > this.MAX_CHUNK_SIZE){
+//				//2 - chunk if needed
+//			}
+			var hydrate_field = 'Name';
+			if (q == 'User'){
+				hydrate_field = 'DisplayName';
+			}
+            promises.push(this._loadWsapiStore(q,values_to_hydrate,hydrate_field));
+		},this);
+        
+        if (promises.length == 0){
+        	deferred.resolve();
+        }
+		Deft.Promise.all(promises).then({
+            scope: this,
+            success: function(objects) {
+                Ext.each(objects, function(o){
+                    var obj = o[0];
+                    var obj_data = o[1];
+                    var obj_hydrate_field = o[2];
+                 	if (obj_data.length > 0){
+                    	Ext.each(obj_data, function(d){
+                    		this.wsapiHydratedValues[obj][d.get('ObjectID').toString()] = d.get(obj_hydrate_field);
+                    	},this);
+                    }
+                },this);
+                 deferred.resolve();
+           },
+           failure: function(){
+        	   deferred.reject('Error hydrating wsapi fields');
+           }
+        });
+		return deferred; 
+	},
+	_loadWsapiStore: function(object_type,object_ids,hydrate_field){
+		this.logger.log('_loadWsapiStore',object_type,hydrate_field,object_ids);
+		var deferred = Ext.create('Deft.Deferred');
+		
+		var filter = null;
+		Ext.each(object_ids, function(oid){
+			if (filter == null){
+				filter = Ext.create('Rally.data.wsapi.Filter', {
+				     property: 'ObjectID',
+				     value: oid
+				});
+			} else {
+				filter = filter.or(Ext.create('Rally.data.wsapi.Filter', {
+				     property: 'ObjectID',
+				     value: oid}));
+			}
+		},this);
+		
+		Ext.create('Rally.data.wsapi.Store', {
+		    model: object_type,
+		    filters: filter,
+		    autoLoad: true,
+		    listeners: {
+		        load: function(store, data, success) {
+		            if (success){
+			        	deferred.resolve([object_type, data, hydrate_field]);
+		            } else {
+		            	deferred.resolve([object_type, [], hydrate_field]);
+		            }
+		        }
+		    },
+		    fetch: ['ObjectID',hydrate_field]
+		});
+		
+		return deferred.promise; 
+	},
 	_mungeLookbackDataIntoTimelineHash: function(data){
     	
 		var timeline_hash = {};
-
+		this.wsapiHydratedValues = {};
 		Ext.each(data, function(d){
 
     		var formatted_id = d.get('FormattedID');
@@ -220,7 +378,9 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     			timeline_hash[formatted_id] = Ext.create('Rally.technicalservices.data.Timeline',{
     				timelineField: this.timelineField,
      			});
+    			
     			timeline_hash[formatted_id].setData(d);
+    			this._addToWsapiHydratedValues(d);
     		} else {
     			timeline_hash[formatted_id].addTimepoint(d);
     		}
@@ -229,6 +389,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     			this.maxTimepoints = num_tp;
     		}
     	}, this);
+
 		return timeline_hash;
 	},
 
@@ -236,19 +397,22 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 		this.logger.log('getFlattenedCumulativeAgeData', tl_hash);
 		//Returns an array of data that can be plopped into a custom store or exported.  
     	var data = [];
+    	 
     	var tl_states = this.timelineStates;
-    	Object.keys(tl_hash).forEach(function(key) { 
+    	Ext.each(Object.keys(tl_hash), function(key) { 
     		//Calculate State Age
     		var tl = tl_hash[key];
-   			var row = tl.timelineData
-
+   			//var row = tl.timelineData
+    		
+    		var row = tl.getHydratedData(this.wsapiHydratedFields, this.wsapiHydratedValues);
+    		
    			//Initialize the row headers
     		Ext.each(tl_states, function(state){
     			row[state] = tl.getCumulativeAgeInDays(state);
     		}, this);
    			row['Transitions'] = tl.timepoints.length
-  		data.push(row);
-    	});
+   			data.push(row);
+    	},this);
     	return data; 
 	},
 
@@ -256,19 +420,19 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 		this.logger.log('getFlattenedLastTransitionStartDateData', tl_hash);
 		var data = [];
     	var tl_states = this.timelineStates;
-    	Object.keys(tl_hash).forEach(function(key) { 
-    		//Calculate State Age
-    		var tl = tl_hash[key];
-   			var row = tl.timelineData
-
-   			//Initialize the row headers
-    		Ext.each(tl_states, function(state){    			
-    			row[state] = tl.getLastTransitionStartDate(state);
-    		}, this);
-   			row['Transitions'] = tl.getNumTransitions();
-  		data.push(row);
-    	});
-    	return data; 
+		    	Object.keys(tl_hash).forEach(function(key) { 
+		    		//Calculate State Age
+		    		var tl = tl_hash[key];
+		   			var row = tl.timelineData
+		
+		   			//Initialize the row headers
+		    		Ext.each(tl_states, function(state){    			
+		    			row[state] = tl.getLastTransitionStartDate(state);
+		    		}, this);
+		   			row['Transitions'] = tl.getNumTransitions();
+		  		data.push(row);
+		    	});
+		    	return data; 
 	},
 
 	getFlattenedComprehensiveData: function(tl_hash){
