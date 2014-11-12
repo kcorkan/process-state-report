@@ -3,6 +3,8 @@ Ext.define('CustomApp', {
     componentCls: 'app',
     logger: new Rally.technicalservices.Logger(),
     items: [
+        {xtype:'container',itemId:'criteria_box'},
+        {xtype:'container',itemId:'button_box',layout:{type:'hbox'}},
         {xtype:'container',itemId:'display_box'},
         {xtype:'tsinfolink'}
     ],
@@ -24,7 +26,7 @@ Ext.define('CustomApp', {
     	
     	var model_type = cb.getValue();
     	
-    	var cb_field = this.down('#display_box').add({
+    	var cb_field = this.down('#criteria_box').add({
         	xtype: 'rallyfieldcombobox',
             fieldLabel: 'Field type:',
             itemId: 'field-selector',
@@ -33,7 +35,7 @@ Ext.define('CustomApp', {
     	var field_store = cb_field.getStore();
     	field_store.on('load',this._filterDropDownList,this);
     	
-    	this.down('#display_box').add({
+    	this.down('#criteria_box').add({
     			xtype: 'rallycombobox',
     			store: Rally.technicalservices.data.CalculatedStore.getViewStore(),
     		    itemId: 'view-selector',
@@ -42,13 +44,21 @@ Ext.define('CustomApp', {
     		    fieldLabel: 'View'
     		});
     	
-    	this.down('#display_box').add({
+    	this.down('#button_box').add({
     			xtype: 'rallybutton',
     			text: 'Run',
     			itemId: 'run-button',
     			scope: this,
     			handler: this._run
     	});
+    	this.down('#button_box').add({
+			xtype: 'rallybutton',
+			text: 'Export',
+			itemId: 'export-button',
+			scope: this,
+			handler: this._exportData
+    	});
+
     },
     _addTypeSelector: function(){
         this.logger.log('_addTypeSelector');
@@ -67,7 +77,7 @@ Ext.define('CustomApp', {
             value: 'Portfolio'
         }));
         
-        this.down('#display_box').add({
+        this.down('#criteria_box').add({
             xtype: 'rallycombobox',
             displayField: 'DisplayName',
             fieldLabel: 'Artifact type:',
@@ -127,7 +137,8 @@ Ext.define('CustomApp', {
     	this.logger.log('_generateReport');
     	
     	this.setLoading(true);
-        //Get Settings
+        
+    	//Get Settings
     	var model = this.down('#type-selector').getValue();
     	var field = this.down('#field-selector').getRecord(); 
     	var action = this.down('#view-selector').getValue();
@@ -145,6 +156,7 @@ Ext.define('CustomApp', {
     		scope: this,
     		success: function(data){
     	    	this.logger.log('CalculatedStore.load Success', data);
+    	    	this.exportData = data;  
     	    	var store = Ext.create('Rally.data.custom.Store', {
     		        data: data,
     		        autoLoad: true
@@ -174,5 +186,27 @@ Ext.define('CustomApp', {
     			this.setLoading(false);
     		}
     	});
+    },
+    _exportData: function(){
+    	this.logger.log('_exportData');
+    	var fileName = 'data.csv';
+    	var keys = [];
+    	var data = this.exportData;
+    	keys = Object.keys(data[0]);
+
+     	var text = keys.join(',') + '\n';
+    	Ext.each(data, function(d){
+     		Ext.each(keys, function(key){
+     			var val = d[key] || '';
+     			if (/\n|,|\t/.test(val)){
+           			text += Ext.String.format("\"{0}\",", val);
+     			} else {
+         			text += Ext.String.format("{0},", val);
+     			}
+     		});
+     		text += '\n';
+    	});
+    	Rally.technicalservices.FileUtilities.saveTextAsFile(text, fileName.toString());
     }
+
 });
