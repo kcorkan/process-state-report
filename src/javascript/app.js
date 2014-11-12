@@ -20,6 +20,8 @@ Ext.define('CustomApp', {
         	this.down('#additional-field-selector').destroy();
         	this.down('#view-selector').destroy();
         	this.down('#run-button').destroy();
+        	this.down('#export-button').destroy();
+
         	if (this.down('#report-grid')){
         		this.down('#report-grid').destroy();
         	}
