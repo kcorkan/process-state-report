@@ -41,19 +41,26 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 			}
 		},this);
 	},
-	getHydratedData: function(wsapiHydratedFields, wsapiHydratedValues){
+	getHydratedData: function(wsapiHydratedFields, wsapiHydratedValues,onlyIncludeFields){
 		var hydrated_fields = Object.keys(wsapiHydratedFields);
 		var data = {};
 		Ext.each(Object.keys(this.timelineData), function(key){
-			var val = this.timelineData[key];
-			if (val && val != '' && Ext.Array.contains(hydrated_fields,key)){
-				var wsapi_value_key = wsapiHydratedFields[key];
-				var new_val = wsapiHydratedValues[wsapi_value_key][val.toString()];
-				if (new_val){
-					val = new_val;
-				}
+			var bInclude = true; 
+			if (onlyIncludeFields && onlyIncludeFields.length > 0){
+				bInclude = Ext.Array.contains(onlyIncludeFields, key);
 			}
-			data[key] = val;
+			
+			if (bInclude){
+				var val = this.timelineData[key];
+				if (bInclude && val && val != '' && Ext.Array.contains(hydrated_fields,key)){
+					var wsapi_value_key = wsapiHydratedFields[key];
+					var new_val = wsapiHydratedValues[wsapi_value_key][val.toString()];
+					if (new_val){
+						val = new_val;
+					}
+				}
+				data[key] = val;
+			}
 		},this);
 		return data;
 	},
@@ -135,7 +142,7 @@ Ext.define('Rally.technicalservices.data.Timeline',{
 
 Ext.define('Rally.technicalservices.data.CalculatedStore',{
     logger: new Rally.technicalservices.Logger(),
-	MAX_CHUNK_SIZE: 50,
+	MAX_CHUNK_SIZE: 25,
 	wsapiHydratedFields:  {
 		    'Project':'Project',
 			'Iteration':'Iteration',
@@ -214,6 +221,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 	
 	_getFetchFields: function(){
 		var fetch_fields = Ext.Array.merge(this.fetchFields, [this.timelineField]);
+		console.log ('fetch fields',fetch_fields);
 		return fetch_fields;
 	},
 	
@@ -235,13 +243,13 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     	var previous_field_name = Ext.String.format("_PreviousValues.{0}",this.timelineField); 
     	var fetch_fields = this._getFetchFields();
     	var fetch_hydrate = this._getHydrateFields();
-
+    	this.logger.log('_fetchLookbackStore', previous_field_name, fetch_fields, fetch_hydrate);
     	Ext.create('Rally.data.lookback.SnapshotStore', {
             scope: this,
             listeners: {
                 scope: this,
                 load: function(store, data, success){
-                    this.logger.log('fetchLookbackStore returned data',data);
+                    this.logger.log('fetchLookbackStore returned data',success, data);
                     deferred.resolve(data);
                 }
             },
@@ -296,15 +304,26 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 				}
 			},this);
 			
-			this.logger.log('Hydrating Values',q,values_to_hydrate.length, values_to_hydrate);
-//			if (values_to_hydrate.length > this.MAX_CHUNK_SIZE){
-//				//2 - chunk if needed
-//			}
+			/*
+			 * Set the field to hydrate
+			 */
 			var hydrate_field = 'Name';
 			if (q == 'User'){
 				hydrate_field = 'DisplayName';
 			}
-            promises.push(this._loadWsapiStore(q,values_to_hydrate,hydrate_field));
+			this.logger.log('_getWsapiHydratedValues: Hydrating',q,values_to_hydrate.length, values_to_hydrate,hydrate_field);
+
+			if (values_to_hydrate.length > this.MAX_CHUNK_SIZE){
+				var start_idx = 0;
+				console.log('original array',values_to_hydrate);
+				while(start_idx < values_to_hydrate.length){
+					chunk_values = values_to_hydrate.splice(start_idx, this.MAX_CHUNK_SIZE);
+					promises.push(this._loadWsapiStore(q,chunk_values,hydrate_field));
+				}
+
+			} else {
+	            promises.push(this._loadWsapiStore(q,values_to_hydrate,hydrate_field));
+			}
 		},this);
         
         if (promises.length == 0){
@@ -319,6 +338,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
                     var obj_hydrate_field = o[2];
                  	if (obj_data.length > 0){
                     	Ext.each(obj_data, function(d){
+                    		console.log(obj_hydrate_field, d.get('ObjectID').toString(),d.get(obj_hydrate_field));
                     		this.wsapiHydratedValues[obj][d.get('ObjectID').toString()] = d.get(obj_hydrate_field);
                     	},this);
                     }
@@ -353,6 +373,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 		    model: object_type,
 		    filters: filter,
 		    autoLoad: true,
+		    context: {project: null},
 		    listeners: {
 		        load: function(store, data, success) {
 		            if (success){
@@ -389,7 +410,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     			this.maxTimepoints = num_tp;
     		}
     	}, this);
-
+		this.logger.log('_mungeLookbackDataIntoTimelineHash records',Object.keys(timeline_hash).length);
 		return timeline_hash;
 	},
 
@@ -404,7 +425,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     		var tl = tl_hash[key];
    			//var row = tl.timelineData
     		
-    		var row = tl.getHydratedData(this.wsapiHydratedFields, this.wsapiHydratedValues);
+    		var row = tl.getHydratedData(this.wsapiHydratedFields, this.wsapiHydratedValues, this.fetchFields);
     		
    			//Initialize the row headers
     		Ext.each(tl_states, function(state){
@@ -423,7 +444,8 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
 		    	Object.keys(tl_hash).forEach(function(key) { 
 		    		//Calculate State Age
 		    		var tl = tl_hash[key];
-		   			var row = tl.timelineData
+		   //			var row = tl.timelineData
+		    		var row = tl.getHydratedData(this.wsapiHydratedFields, this.wsapiHydratedValues, this.fetchFields);
 		
 		   			//Initialize the row headers
 		    		Ext.each(tl_states, function(state){    			
@@ -443,7 +465,8 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     	Object.keys(tl_hash).forEach(function(key) { 
 
     		var tl = tl_hash[key];
-   			var row = tl.timelineData
+//   			var row = tl.timelineData
+    		var row = tl.getHydratedData(this.wsapiHydratedFields, this.wsapiHydratedValues, this.fetchFields);
    			//Initialize the row headers
    			var counter = 0;
 

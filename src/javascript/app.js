@@ -198,12 +198,14 @@ Ext.define('CustomApp', {
     	cs.load(action).then({
     		scope: this,
     		success: function(data){
-    	    	this.logger.log('CalculatedStore.load Success', data);
-    	    	this.exportData = data;  
-    	    	
+    	    	this.logger.log('CalculatedStore.load Success', data.length);
+    	    	this.exportData = data; 
+
     	    	var store = Ext.create('Rally.data.custom.Store', {
     		        data: data,
-    		        autoLoad: true
+    		        autoLoad: true,
+    		        //limit: 'infinity',
+    		        pageSize: 200
     		    });
     	    	
     	    	var gcolcfgs = [];
@@ -222,7 +224,12 @@ Ext.define('CustomApp', {
     				xtype:'rallygrid',
     				store: store,
     				itemId: 'report-grid',
-    				columnCfgs: gcolcfgs
+    				columnCfgs: gcolcfgs,
+    				showPagingToolbar: true,
+    				pagingToolbarCfg: {
+    					store: store,
+    					pageSizes: [100,200,500,1000]
+    				}
     			});
     			this.down('#export-button').setDisabled(false);
     			this.setLoading(false);
