@@ -484,22 +484,34 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
    	   	    			row[index_date] = tp.startDate;
    	   	    			row[index_end_date] = tp.endDate;
    	    			} 
-   	    		}
- 			}
-    		data.push(row);
-    	});
-    	return data; 
-	},
-	statics: {
-		getViewStore: function(){
-			return Ext.create('Rally.data.custom.Store', {
-		        data: [
-		               {name:'Cumulative Age', operation:'getFlattenedCumulativeAgeData'},
-		               {name:'Last Transition Date', operation:'getFlattenedLastTransitionStartDateData'},
-		               {name:'Comprehensive View', operation:'getFlattenedComprehensiveData'}
-		               ],
-		        autoLoad: true
-		    });
+                }
+            }
+            data.push(row);
+        });
+        return data; 
+     },
+    statics: {
+        getViewStore: function(){
+            return Ext.create('Rally.data.custom.Store', {
+                 data: [
+                       {name:'Cumulative Age', operation:'getFlattenedCumulativeAgeData'},
+                       {name:'Last Transition Date', operation:'getFlattenedLastTransitionStartDateData'}, 
+                       {name:'Comprehensive View', operation:'getFlattenedComprehensiveData'}
+                       ],
+                 autoLoad: true
+            });
+        },
+        getFilterOperators: function(fieldName){
+           if (fieldName && fieldName.match(/StartDate/)){
+                return [{'OperatorName':'>'},{'OperatorName':'<'}];
+            }
+            if (fieldName && fieldName.match(/EndDate/)){
+                return [{'OperatorName':'>'},{'OperatorName':'<'}];
+            }
+            if (fieldName && fieldName.match(/State/)){
+                return [{'OperatorName':'='},{'OperatorName':'contains'}];
+            }
+            return [{'OperatorName':'='},{'OperatorName':'>'},{'OperatorName':'<'}];
 		}
 	}
 });
