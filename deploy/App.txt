@@ -3,11 +3,11 @@
 <head>
     <title>Process State Report</title>
     <!--  (c) 2014 Rally Software Development Corp.  All Rights Reserved. -->
-    <!--  Build Date: Wed Dec 03 2014 14:55:51 GMT-0700 (MST) -->
+    <!--  Build Date: Wed Dec 03 2014 15:13:01 GMT-0700 (MST) -->
     
     <script type="text/javascript">
-        var APP_BUILD_DATE = "Wed Dec 03 2014 14:55:51 GMT-0700 (MST)";
-        var CHECKSUM = 41241682194;
+        var APP_BUILD_DATE = "Wed Dec 03 2014 15:13:01 GMT-0700 (MST)";
+        var CHECKSUM = 41888149212;
     </script>
     
     <script type="text/javascript" src="/apps/2.0rc2/sdk.js"></script>
@@ -185,7 +185,9 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
             'Project':'Project',
             'Feature':'PortfolioItem/Feature',
             'Owner':'User',
-            'SubmittedBy':'User'},
+            'SubmittedBy':'User',
+            'Release':'Release',
+            'Iteration':'Iteration'},
 
     /*
      * sourceFields: fields to fetch from the store
@@ -262,7 +264,7 @@ Ext.define('Rally.technicalservices.data.CalculatedStore',{
     },
     
     _getHydrateFields: function(){
-        var hydrated_fields = ['ScheduleState','State','Release','Iteration'];
+        var hydrated_fields = ['ScheduleState','State']; //,'Release','Iteration'];
         var fetch_hydrate = [];
         Ext.each(this._getFetchFields(), function(field){
             if (Ext.Array.contains(hydrated_fields, field)){
@@ -1036,8 +1038,19 @@ Ext.define('CustomApp', {
         return true;
     },
     _filterGridWithCustomStore: function(){
+          var special_xtypes = ['rallyprojectpicker','rallyusersearchcombobox','rallyreleasecombobox','rallyiterationcombobox'];
           var prop = this.down('#filter-property').getValue();
           var val = this.down('#filter-value').getValue(); 
+          if (Ext.Array.contains(special_xtypes, this.down('#filter-value').xtype)){
+              if (this.down('#filter-value').xtype == 'rallyusersearchcombobox'){
+                  val = this.down('#filter-value').getRecord().get('DisplayName');
+              } else {
+                  val = this.down('#filter-value').getRecord().get('Name');
+              }
+          }
+          
+          console.log(val,typeof(val));
+          var op = undefined;
           if (this.down('#filter-operator')){
               op = this.down('#filter-operator').getValue(); 
           }
@@ -1047,19 +1060,6 @@ Ext.define('CustomApp', {
             
             var current_val = item.get(prop);
             var current_number = Number(current_val);
-            var isValidDate = function(d){
-                console.log('datcheck',d,Object.prototype.toString.call(d));
-                if ( Object.prototype.toString.call(d) === "[object Date]" ) {
-                    if ( isNaN( d.getTime() ) ) {  // d.valueOf() could also work
-                        return false;
-                    }
-                  }
-                  else {
-                      return false;
-                  }
-                return true;
-            };
-            
             
             console.log('parse', current_date, current_number, current_val);
             switch (op){
@@ -1089,9 +1089,6 @@ Ext.define('CustomApp', {
                         } else {
                             return false;  
                         }
-                        
-                        
-                        
                     case 'before':
                         var target_date = Date.parse(val);
                         var current_date = Date.parse(current_val);
