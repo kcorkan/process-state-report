@@ -88,7 +88,7 @@ Ext.define('CustomApp', {
     _filterPickerDropDownList: function() {
         var fields = this.down('#field-selector').getModel().getFields();
         this.logger.log('_filterPickerDropDownList');
-        var whitelist_types = ['STRING','BOOLEAN','TEXT','INTEGER','DECIMAL','DATE'];
+        var whitelist_types = ['STRING','BOOLEAN','TEXT','INTEGER','DECIMAL','DATE','OBJECT','STATE'];
         var whitelist_fields = [];
        
         Ext.each(fields, function(f){
@@ -158,6 +158,7 @@ Ext.define('CustomApp', {
         this.down('#field-selector').setValue(store.getAt(1));
         this._filterPickerDropDownList()
     },
+    
     _getProcessStates: function(field){
         var process_states = [];
         if (field.get('fieldDefinition').attributeDefinition.AttributeType == 'BOOLEAN'){
@@ -172,6 +173,7 @@ Ext.define('CustomApp', {
         this.logger.log('_getProcessStates', process_states);
         return process_states;
     },
+    
     _getFetchFields: function(){
         this.logger.log('_getFetchFields');
         
@@ -185,6 +187,7 @@ Ext.define('CustomApp', {
         this.logger.log('_getFetchFields returning', fetch_fields);
         return fetch_fields;
     },
+    
     _run: function(){
         this.logger.log('_generateReport');
         
@@ -289,6 +292,8 @@ Ext.define('CustomApp', {
      * 
      */
     _addFilterControls: function(columns){
+      this.down('#filter_box').removeAll();  
+        
       this.logger.log('_addFilterControls',columns);
         var cb = this.down('#filter_box').add({
             xtype: 'rallycombobox',
@@ -307,30 +312,87 @@ Ext.define('CustomApp', {
         cb.setValue('Name');
 
     },
+    _isValidDate: function(d){
+        this.logger.log('_isValidDate', d,Object.prototype.toString.call(d) );
+        if ( Object.prototype.toString.call(d) === "[object Date]" ) {
+            if ( isNaN( d.getTime() ) ) {  // d.valueOf() could also work
+                return false;
+            }
+          }
+          else {
+              return false;
+          }
+        return true;
+    },
     _filterGridWithCustomStore: function(){
-           var prop = this.down('#filter-property').getValue();
-           var val = this.down('#filter-value').getValue(); 
+          var special_xtypes = ['rallyprojectpicker','rallyusersearchcombobox','rallyreleasecombobox','rallyiterationcombobox'];
+          var prop = this.down('#filter-property').getValue();
+          var val = this.down('#filter-value').getValue(); 
+          if (Ext.Array.contains(special_xtypes, this.down('#filter-value').xtype)){
+              if (this.down('#filter-value').xtype == 'rallyusersearchcombobox'){
+                  val = this.down('#filter-value').getRecord().get('DisplayName');
+              } else {
+                  val = this.down('#filter-value').getRecord().get('Name');
+              }
+          }
+          
+          console.log(val,typeof(val));
+          var op = undefined;
           if (this.down('#filter-operator')){
               op = this.down('#filter-operator').getValue(); 
-        }
+          }
           this.logger.log('filter', prop, op, val);
 
           this.down('#report-grid').getStore().filter({filterFn:function(item){
             
-            var re = new RegExp(val,'gi');
             var current_val = item.get(prop);
-                switch (op){
+            var current_number = Number(current_val);
+            
+            console.log('parse', current_date, current_number, current_val);
+            switch (op){
                     case '>=':
-                        return Number(current_val) >= val;
+                        if (current_number.isNaN()){ return false;}
+                        return current_number >= val;
                     case '<=':
-                        return Number(current_val) <= val;
+                        if (current_number.isNaN()){ return false;}
+                        return current_number <= val;
                     case '>':
-                        return Number(current_val) > val;
+                        if (current_number.isNaN()){ return false;}
+                        return current_number > val;
                     case '<':
-                        return Number(current_val) < val;
+                        if (current_number.isNaN()){ return false;}
+                        return current_number < val;
                     case 'contains':
                         var re = new RegExp(val,'gi');
                         return re.test(current_val);
+                    case 'on':
+                        var target_date = Date.parse(val);
+                        var current_date = Date.parse(current_val);
+                        if (!isNaN(target_date) && !isNaN(current_date)){
+                            var td = Rally.util.DateTime.toIsoString(new Date(target_date), false);
+                            var cd = Rally.util.DateTime.toIsoString(new Date(current_date), true);
+                            console.log(td.substring(0,10),cd.substring(0,10));
+                            return (td.substring(0,10) == cd.substring(0,10));
+                        } else {
+                            return false;  
+                        }
+                    case 'before':
+                        var target_date = Date.parse(val);
+                        var current_date = Date.parse(current_val);
+                        if (!isNaN(target_date) && !isNaN(current_date)){
+                            return target_date > current_date;
+                       } else {
+                            return false;  
+                        }
+                    case 'after':
+                        var target_date = Date.parse(val);
+                        var current_date = Date.parse(current_val);
+                        if (!isNaN(target_date) && !isNaN(current_date)){
+                            return target_date < current_date;
+                       } else {
+                            return false;  
+                        }
+ 
                     case '=':
                     case undefined:
                         return current_val.toLowerCase() == val.toLowerCase();  
@@ -359,6 +421,7 @@ Ext.define('CustomApp', {
         }
         
         var filter_value_ctl = this._getFilterValueControl(newValue);
+        console.log(filter_value_ctl);
         this.down('#filter_box').add(filter_value_ctl);         
         
         this.down('#filter_box').add({
@@ -385,31 +448,43 @@ Ext.define('CustomApp', {
         var ctl = {
                 xtype: 'rallytextfield',
                 padding: 5,
-                itemId: 'filter-value',
-                allowNoEntry: false
+                itemId: 'filter-value'
             };
 
         var field = this.down('#field-selector').getModel().getField(newVal);
-      //  var field = this.typeModel.getField(newVal);
+        var view = this.down('#view-selector').getValue();
+        var type = 'STRING';
+        if (field && field.attributeDefinition){
+            type = field.attributeDefinition.AttributeType;
+        } else {
+            type = Rally.technicalservices.data.CalculatedStore.getFilterFieldType(newVal,view);
+        }
         var model_name = this.down('#field-selector').getModel().getName();
 
-        if (field){
-            switch(field.attributeDefinition.AttributeType){
-              case 'BOOLEAN':  
-                  ctl = {
+        switch(type){
+          case 'BOOLEAN':  
+               ctl = {
                         xtype: 'rallycombobox',
                         padding: 5,
                         itemId: 'filter-value',
                         store: ['true','false']
                     };
                   break;
+          case 'DATE':
+              ctl = {
+                  xtype: 'rallydatefield',
+                  itemId: 'filter-value',
+                  padding: 5
+              };
+              break; 
           case 'TEXT':
           case 'STRING':
           case 'STATE':
           case 'RATING':
-              if (field.attributeDefinition.AttributeType == 'RATING' || 
-                  field.attributeDefinition.AttributeType == 'STATE' ||
-                      field.attributeDefinition.AllowedValues.length > 0){
+              if (field){
+                  if (field.attributeDefinition.AttributeType == 'RATING' || 
+                          field.attributeDefinition.AttributeType == 'STATE' ||
+                          field.attributeDefinition.AllowedValues.length > 0){
                   ctl = {
                               xtype: 'rallyfieldvaluecombobox',
                               model: model_name,
@@ -417,10 +492,9 @@ Ext.define('CustomApp', {
                               itemId: 'filter-value',
                               field: field.name
                       };
-                  console.log('statecontrol',ctl);    
-  
+                  }
               }
-                  break;
+              break;
           case 'OBJECT':
               //Release, Iteration, User, Project, artifact links
               var schema = field.attributeDefinition.SchemaType;
@@ -461,17 +535,9 @@ Ext.define('CustomApp', {
 
               }
               break;
-          case 'DATE':
           case 'DECIMAL':
           case 'INTEGER':
-          case 'QUANTITY':
-          case 'WEB_LINK':
-          case 'RAW':
-          case 'BINARY_DATA':
-          case 'COLLECTION':
-          default:
-            }
-        }// if field
+        }
         return ctl; 
     },
     _clearGridFilter: function(){
@@ -503,30 +569,33 @@ Ext.define('CustomApp', {
     },
 
     _getFilterOperatorStore: function(newVal){
-
-        var field = this.down('#field-selector').getModel().getField(newVal);
         this.logger.log('_getFilterOperatorStore', newVal, field);
+        
+        var field = this.down('#field-selector').getModel().getField(newVal);
+        var view = this.down('#view-selector').getValue();
         
         var data = [];
         var operators = [];
-        if (field && field.attributeDefinition.AttributeType != 'BOOLEAN' && 
-                field.name.toLowerCase() == newVal.toLowerCase()) {
-            if (field.attributeDefinition.AttributeType == 'STRING' || field.attributeDefinition.AttributeType == 'TEXT'){
-                operators = [{OperatorName: '='},{OperatorName: 'contains'}];
-            } else {
-                if (field.attributeDefinition.AttributeType == 'DECIMAL' || field.attributeDefinition.AttributeType == 'INTEGER'){
-                    operators = [{OperatorName: '='},{OperatorName: '<='},{OperatorName: '>='},{OperatorName: '<'},{OperatorName: '>'}];
-                }
+        if (field && field.name.toLowerCase() == newVal.toLowerCase()) {
+            switch(field.attributeDefinition.AttributeType){
+                case 'STRING':
+                case 'TEXT':
+                    operators = ['=','contains'];
+                    break;
+                case 'DECIMAL':
+                case 'INTEGER':
+                    operators = ['=','<=','>=','<','>'];
+                    break;  
+                case 'DATE':
+                    operators = ['on','before', 'after'];
             }
-        } else {
+       } else {
             //This is a derived field
-            operators = Rally.technicalservices.data.CalculatedStore.getFilterOperators(newVal);
+            operators = Rally.technicalservices.data.CalculatedStore.getFilterOperators(newVal, view);
         }
 
         Ext.each(operators, function(op){
-            if (op.OperatorName && op.OperatorName.length > 0 ){
-                data.push({'name':op.OperatorName});                        
-            }
+            data.push({'name':op});
         });
         
         if (data.length == 0){
